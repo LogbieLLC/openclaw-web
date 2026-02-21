@@ -351,6 +351,101 @@
 
     #empty-state .icon { font-size: 48px; margin-bottom: 8px; }
 
+    /* Attachment button */
+    #attach-btn {
+      width: 42px;
+      height: 42px;
+      flex-shrink: 0;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s, border-color 0.15s;
+      align-self: flex-end;
+      color: var(--text-muted);
+    }
+
+    #attach-btn:hover {
+      background: var(--surface2);
+      border-color: var(--accent);
+      color: var(--text);
+    }
+
+    #attach-btn svg { width: 18px; height: 18px; fill: currentColor; }
+
+    /* Attachment preview strip */
+    #attachment-strip {
+      display: none;
+      gap: 8px;
+      padding: 8px 16px 0;
+      background: var(--surface);
+      flex-wrap: wrap;
+    }
+
+    #attachment-strip.has-items { display: flex; }
+
+    .att-chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 12px;
+      color: var(--text);
+      max-width: 200px;
+      animation: fadeIn 0.15s ease;
+    }
+
+    .att-chip .att-thumb {
+      width: 28px;
+      height: 28px;
+      border-radius: 4px;
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+
+    .att-chip .att-icon {
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+
+    .att-chip .att-name {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .att-chip .att-remove {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 14px;
+      cursor: pointer;
+      padding: 0;
+      line-height: 1;
+      flex-shrink: 0;
+      border-radius: 4px;
+      width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .att-chip .att-remove:hover { color: #f44; background: rgba(255,255,255,0.08); }
+
     /* Responsive */
     @media (max-width: 600px) {
       #sidebar {
@@ -394,7 +489,15 @@
         </div>
       </div>
 
+      <input type="file" id="file-input" hidden multiple
+        accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.txt,.md,.csv,.json,image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,text/markdown,text/csv,application/json" />
+      <div id="attachment-strip"></div>
       <div id="input-area">
+        <button id="attach-btn" title="Attach file">
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M16.5 6v11.5a4 4 0 0 1-8 0V5a2.5 2.5 0 0 1 5 0v10.5a1 1 0 0 1-2 0V6h-1.5v9.5a2.5 2.5 0 0 0 5 0V5a4 4 0 0 0-8 0v12.5a5.5 5.5 0 0 0 11 0V6H16.5z"/>
+          </svg>
+        </button>
         <textarea id="input" rows="1" placeholder="Message Jun…"></textarea>
         <button id="send-btn" title="Send">
           <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -429,20 +532,24 @@
     }
 
     // ── DOM refs ──
-    const messagesEl   = document.getElementById('messages');
-    const inputEl      = document.getElementById('input');
-    const sendBtn      = document.getElementById('send-btn');
-    const convListEl   = document.getElementById('conversations');
-    const newChatBtn   = document.getElementById('new-chat-btn');
-    const sidebarEl    = document.getElementById('sidebar');
+    const messagesEl    = document.getElementById('messages');
+    const inputEl       = document.getElementById('input');
+    const sendBtn       = document.getElementById('send-btn');
+    const attachBtn     = document.getElementById('attach-btn');
+    const fileInput     = document.getElementById('file-input');
+    const attStrip      = document.getElementById('attachment-strip');
+    const convListEl    = document.getElementById('conversations');
+    const newChatBtn    = document.getElementById('new-chat-btn');
+    const sidebarEl     = document.getElementById('sidebar');
     const sidebarToggle = document.getElementById('sidebar-toggle');
 
     // ── State ──
     const STORE_KEY = 'jun_conversations';
-    let conversations = loadConversations();
-    let currentId     = null;
-    let history       = [];
-    let busy          = false;
+    let conversations  = loadConversations();
+    let currentId      = null;
+    let history        = [];
+    let busy           = false;
+    let pendingFiles   = []; // { file: File, previewUrl?: string }
 
     // ── LocalStorage helpers ──
     function loadConversations() {
@@ -669,28 +776,139 @@
 
     sendBtn.addEventListener('click', sendMessage);
 
+    // ── Attachment handling ──
+    attachBtn.addEventListener('click', () => fileInput.click());
+
+    fileInput.addEventListener('change', () => {
+      for (const file of fileInput.files) {
+        const entry = { file };
+        if (file.type.startsWith('image/')) {
+          entry.previewUrl = URL.createObjectURL(file);
+        }
+        pendingFiles.push(entry);
+      }
+      fileInput.value = '';
+      renderAttachmentStrip();
+    });
+
+    function renderAttachmentStrip() {
+      attStrip.innerHTML = '';
+      if (pendingFiles.length === 0) {
+        attStrip.classList.remove('has-items');
+        return;
+      }
+      attStrip.classList.add('has-items');
+
+      pendingFiles.forEach((entry, idx) => {
+        const chip = document.createElement('div');
+        chip.className = 'att-chip';
+
+        if (entry.previewUrl) {
+          const thumb = document.createElement('img');
+          thumb.className = 'att-thumb';
+          thumb.src = entry.previewUrl;
+          thumb.alt = entry.file.name;
+          chip.appendChild(thumb);
+        } else {
+          const icon = document.createElement('span');
+          icon.className = 'att-icon';
+          icon.textContent = '\uD83D\uDCC4';
+          chip.appendChild(icon);
+        }
+
+        const name = document.createElement('span');
+        name.className = 'att-name';
+        name.textContent = entry.file.name;
+        chip.appendChild(name);
+
+        const rm = document.createElement('button');
+        rm.className = 'att-remove';
+        rm.textContent = '\u00D7';
+        rm.title = 'Remove';
+        rm.addEventListener('click', () => {
+          if (entry.previewUrl) URL.revokeObjectURL(entry.previewUrl);
+          pendingFiles.splice(idx, 1);
+          renderAttachmentStrip();
+        });
+        chip.appendChild(rm);
+
+        attStrip.appendChild(chip);
+      });
+    }
+
+    async function uploadFiles() {
+      const results = [];
+      for (const entry of pendingFiles) {
+        const form = new FormData();
+        form.append('file', entry.file);
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'X-CSRF-Token': csrfToken },
+          body: form,
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: res.statusText }));
+          throw new Error(err.error || 'Upload failed');
+        }
+        results.push(await res.json());
+      }
+      return results;
+    }
+
     async function sendMessage() {
       const text = inputEl.value.trim();
-      if (!text || busy) return;
+      if ((!text && pendingFiles.length === 0) || busy) return;
 
       busy = true;
       sendBtn.disabled = true;
       inputEl.value = '';
       inputEl.style.height = 'auto';
 
-      appendMessage('user', text);
-      history.push({ role: 'user', content: text });
+      // Upload attachments first
+      let attachments = [];
+      const hadFiles = pendingFiles.length > 0;
+      if (hadFiles) {
+        try {
+          const uploaded = await uploadFiles();
+          attachments = uploaded.map(u => ({
+            fileId: u.fileId,
+            name: u.name,
+            mimeType: u.type,
+            data: u.data,
+          }));
+        } catch (err) {
+          appendMessage('assistant', '\u26A0\uFE0F Upload error: ' + err.message);
+          busy = false;
+          sendBtn.disabled = false;
+          return;
+        }
+        // Clean up previews
+        pendingFiles.forEach(e => { if (e.previewUrl) URL.revokeObjectURL(e.previewUrl); });
+        pendingFiles = [];
+        renderAttachmentStrip();
+      }
+
+      // Build display text (show filenames if attached)
+      const displayText = hadFiles
+        ? (text || '') + (attachments.length ? '\n\uD83D\uDCCE ' + attachments.map(a => a.name).join(', ') : '')
+        : text;
+
+      appendMessage('user', displayText.trim());
+      history.push({ role: 'user', content: text || '(see attached files)' });
 
       showTyping();
 
       try {
+        const body = { messages: history, sessionId: currentId };
+        if (attachments.length > 0) body.attachments = attachments;
+
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'X-CSRF-Token': csrfToken,
           },
-          body: JSON.stringify({ messages: history, sessionId: currentId }),
+          body: JSON.stringify(body),
         });
 
         removeTyping();

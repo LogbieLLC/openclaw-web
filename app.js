@@ -1,6 +1,9 @@
 const express = require('express');
 const cookieParser = require('cookie-parser');
+const multer = require('multer');
+const crypto = require('crypto');
 const path = require('path');
+const fs = require('fs');
 
 const ipBlock = require('./middleware/ipBlock');
 const originCheck = require('./middleware/originCheck');
@@ -25,6 +28,58 @@ app.use(express.json());
 // Static files
 app.use(express.static(path.join(__dirname, 'public')));
 
+// ── Upload configuration ──
+const UPLOADS_DIR = path.join(__dirname, 'uploads');
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR);
+
+const ALLOWED_MIMES = new Set([
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+  'application/pdf', 'text/plain', 'text/markdown', 'text/csv',
+  'application/json',
+]);
+
+const ALLOWED_EXTS = new Set([
+  '.jpg', '.jpeg', '.png', '.gif', '.webp',
+  '.pdf', '.txt', '.md', '.csv', '.json',
+]);
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
+  filename: (_req, file, cb) => {
+    const id = crypto.randomBytes(16).toString('hex');
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `${id}${ext}`);
+  },
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: MAX_FILE_SIZE },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ALLOWED_EXTS.has(ext)) {
+      cb(null, true);
+    } else {
+      cb(Object.assign(new Error('File type not allowed'), { code: 'UNSUPPORTED_TYPE' }));
+    }
+  },
+});
+
+// Auto-cleanup files older than 1 hour
+setInterval(() => {
+  if (!fs.existsSync(UPLOADS_DIR)) return;
+  const cutoff = Date.now() - 60 * 60 * 1000;
+  for (const file of fs.readdirSync(UPLOADS_DIR)) {
+    const fp = path.join(UPLOADS_DIR, file);
+    try {
+      const stat = fs.statSync(fp);
+      if (stat.mtimeMs < cutoff) fs.unlinkSync(fp);
+    } catch { /* ignore */ }
+  }
+}, 10 * 60 * 1000); // check every 10 minutes
+
 // Health check (no CSRF needed)
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
@@ -38,9 +93,78 @@ app.get('/api/csrf-token', (req, res) => {
   res.json({ token });
 });
 
-// Chat proxy — CSRF + origin check required
+// ── File upload endpoint ──
+app.post('/api/upload', originCheck, csrf.validate, (req, res) => {
+  upload.single('file')(req, res, (err) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ error: 'File too large (max 10 MB)' });
+      }
+      if (err.code === 'UNSUPPORTED_TYPE') {
+        return res.status(415).json({ error: 'File type not allowed' });
+      }
+      return res.status(500).json({ error: err.message });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file provided' });
+    }
+
+    const filePath = req.file.path;
+    const data = fs.readFileSync(filePath).toString('base64');
+
+    res.json({
+      fileId: path.basename(filePath, path.extname(filePath)),
+      name: req.file.originalname,
+      type: req.file.mimetype,
+      data,
+    });
+  });
+});
+
+// ── Chat proxy — CSRF + origin check required ──
 app.post('/api/chat', originCheck, csrf.validate, async (req, res) => {
-  const { messages, sessionId } = req.body;
+  const { messages, sessionId, attachments } = req.body;
+
+  // Build message array, injecting attachments into the last user message
+  let finalMessages = messages;
+  if (Array.isArray(attachments) && attachments.length > 0) {
+    finalMessages = [...messages];
+    const lastUserIdx = finalMessages.map(m => m.role).lastIndexOf('user');
+
+    if (lastUserIdx !== -1) {
+      const lastUser = finalMessages[lastUserIdx];
+      const contentParts = [];
+
+      // Add attachment content blocks
+      for (const att of attachments) {
+        if (att.mimeType && att.mimeType.startsWith('image/')) {
+          // Image: send as base64 image content block
+          contentParts.push({
+            type: 'image_url',
+            image_url: { url: `data:${att.mimeType};base64,${att.data}` },
+          });
+        } else {
+          // Document: decode base64 and prepend as text
+          let text;
+          try {
+            text = Buffer.from(att.data, 'base64').toString('utf-8');
+          } catch {
+            text = att.data;
+          }
+          contentParts.push({
+            type: 'text',
+            text: `[Attached file: ${att.name}]\n${text}`,
+          });
+        }
+      }
+
+      // Add original user text
+      contentParts.push({ type: 'text', text: lastUser.content });
+
+      finalMessages[lastUserIdx] = { role: 'user', content: contentParts };
+    }
+  }
 
   try {
     const response = await fetch(OPENCLAW_URL, {
@@ -52,7 +176,7 @@ app.post('/api/chat', originCheck, csrf.validate, async (req, res) => {
       },
       body: JSON.stringify({
         model: 'openclaw',
-        messages,
+        messages: finalMessages,
         stream: true,
         user: sessionId || 'webchat',
       }),
