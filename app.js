@@ -146,6 +146,16 @@ app.get('/api/csrf-token', (req, res) => {
   res.json({ token });
 });
 
+// ── Secrets list endpoint ──
+// Returns the NAMES of available SECRET_* env vars (never the values).
+// Requires CSRF + origin check so random sites can't enumerate your secrets.
+app.get('/api/secrets', originCheck, csrf.validate, (_req, res) => {
+  const names = Object.keys(process.env)
+    .filter(k => k.startsWith(SECRET_PREFIX))
+    .sort();
+  res.json({ secrets: names });
+});
+
 // ── File upload endpoint ──
 app.post('/api/upload', originCheck, csrf.validate, (req, res) => {
   upload.single('file')(req, res, (err) => {

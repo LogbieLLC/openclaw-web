@@ -351,6 +351,163 @@
 
     #empty-state .icon { font-size: 48px; margin-bottom: 8px; }
 
+    /* ── Secrets modal ── */
+    #secrets-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      z-index: 200;
+      align-items: flex-end;
+      justify-content: center;
+    }
+
+    #secrets-overlay.open { display: flex; }
+
+    #secrets-modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px 14px 0 0;
+      width: 100%;
+      max-width: 480px;
+      padding: 0 0 env(safe-area-inset-bottom, 0);
+      animation: slideUp 0.18s ease;
+      max-height: 65vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    @media (min-width: 520px) {
+      #secrets-overlay { align-items: center; }
+      #secrets-modal {
+        border-radius: 14px;
+        margin-bottom: 0;
+        max-height: 70vh;
+      }
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(24px); opacity: 0; }
+      to   { transform: translateY(0);    opacity: 1; }
+    }
+
+    #secrets-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px 10px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    #secrets-header h2 {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    #secrets-close {
+      width: 26px;
+      height: 26px;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 18px;
+      cursor: pointer;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.1s, color 0.1s;
+    }
+    #secrets-close:hover { background: var(--surface2); color: var(--text); }
+
+    #secrets-hint {
+      padding: 8px 16px;
+      font-size: 12px;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    #secrets-list {
+      overflow-y: auto;
+      padding: 6px 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    #secrets-list::-webkit-scrollbar { width: 4px; }
+    #secrets-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .secret-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: border-color 0.12s, background 0.12s;
+      font-size: 13px;
+      font-family: monospace;
+      color: var(--text);
+      text-align: left;
+      width: 100%;
+    }
+
+    .secret-item:hover {
+      border-color: var(--accent);
+      background: rgba(124, 106, 247, 0.08);
+      color: #c4baff;
+    }
+
+    .secret-item .si-icon { font-size: 14px; flex-shrink: 0; }
+    .secret-item .si-name { flex: 1; }
+    .secret-item .si-hint {
+      font-size: 11px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: var(--text-muted);
+    }
+
+    #secrets-empty {
+      padding: 20px 16px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    #secrets-empty a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    /* Secret lock button */
+    #secret-btn {
+      width: 42px;
+      height: 42px;
+      flex-shrink: 0;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s, border-color 0.15s;
+      align-self: flex-end;
+      font-size: 16px;
+    }
+
+    #secret-btn:hover {
+      background: var(--surface2);
+      border-color: var(--accent);
+    }
+
     /* Secret token chip */
     .secret-token {
       display: inline-flex;
@@ -505,6 +662,18 @@
         </div>
       </div>
 
+      <!-- Secrets modal -->
+      <div id="secrets-overlay" role="dialog" aria-modal="true" aria-label="Insert secret">
+        <div id="secrets-modal">
+          <div id="secrets-header">
+            <h2>🔒 Insert Secret</h2>
+            <button id="secrets-close" title="Close" aria-label="Close">×</button>
+          </div>
+          <p id="secrets-hint">Click a variable to insert it at your cursor. The actual value is never shown in chat.</p>
+          <div id="secrets-list"></div>
+        </div>
+      </div>
+
       <input type="file" id="file-input" hidden multiple
         accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.txt,.md,.csv,.json,image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,text/markdown,text/csv,application/json" />
       <div id="attachment-strip"></div>
@@ -514,7 +683,8 @@
             <path d="M16.5 6v11.5a4 4 0 0 1-8 0V5a2.5 2.5 0 0 1 5 0v10.5a1 1 0 0 1-2 0V6h-1.5v9.5a2.5 2.5 0 0 0 5 0V5a4 4 0 0 0-8 0v12.5a5.5 5.5 0 0 0 11 0V6H16.5z"/>
           </svg>
         </button>
-        <textarea id="input" rows="1" placeholder="Message Jun… (use {{SECRET_VAR}} to inject secrets)"></textarea>
+        <button id="secret-btn" title="Insert secret">🔒</button>
+        <textarea id="input" rows="1" placeholder="Message Jun…"></textarea>
         <button id="send-btn" title="Send">
           <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
@@ -1029,6 +1199,81 @@
 
     // ── New Chat button ──
     newChatBtn.addEventListener('click', startNewChat);
+
+    // ── Secrets modal ──
+    const secretsOverlay = document.getElementById('secrets-overlay');
+    const secretsList    = document.getElementById('secrets-list');
+    const secretsClose   = document.getElementById('secrets-close');
+    const secretBtn      = document.getElementById('secret-btn');
+
+    function openSecretsModal() {
+      secretsList.innerHTML = '<div id="secrets-empty" style="color:var(--text-muted);padding:20px 16px;text-align:center;font-size:13px;">Loading…</div>';
+      secretsOverlay.classList.add('open');
+
+      fetch('/api/secrets', {
+        headers: {
+          'X-CSRF-Token': csrfToken,
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+      })
+        .then(r => r.json())
+        .then(({ secrets }) => {
+          secretsList.innerHTML = '';
+          if (!secrets || secrets.length === 0) {
+            const empty = document.createElement('div');
+            empty.id = 'secrets-empty';
+            empty.innerHTML = 'No <code>SECRET_*</code> env vars found.<br>Add them to your <code>.env</code> file.';
+            secretsList.appendChild(empty);
+            return;
+          }
+          for (const name of secrets) {
+            const btn = document.createElement('button');
+            btn.className = 'secret-item';
+            btn.innerHTML = `
+              <span class="si-icon">🔒</span>
+              <span class="si-name">${name}</span>
+              <span class="si-hint">click to insert</span>
+            `;
+            btn.addEventListener('click', () => insertSecret(name));
+            secretsList.appendChild(btn);
+          }
+        })
+        .catch(() => {
+          secretsList.innerHTML = '<div id="secrets-empty" style="color:#f66;padding:20px 16px;text-align:center;font-size:13px;">⚠️ Could not load secrets</div>';
+        });
+    }
+
+    function closeSecretsModal() {
+      secretsOverlay.classList.remove('open');
+    }
+
+    function insertSecret(name) {
+      const token = `{{${name}}}`;
+      const start = inputEl.selectionStart;
+      const end   = inputEl.selectionEnd;
+      const val   = inputEl.value;
+      inputEl.value = val.slice(0, start) + token + val.slice(end);
+      // Move cursor after inserted token
+      const pos = start + token.length;
+      inputEl.setSelectionRange(pos, pos);
+      // Trigger auto-resize
+      inputEl.dispatchEvent(new Event('input'));
+      closeSecretsModal();
+      inputEl.focus();
+    }
+
+    secretBtn.addEventListener('click', openSecretsModal);
+    secretsClose.addEventListener('click', closeSecretsModal);
+    // Close on backdrop click (not the modal itself)
+    secretsOverlay.addEventListener('click', e => {
+      if (e.target === secretsOverlay) closeSecretsModal();
+    });
+    // Close on Escape
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && secretsOverlay.classList.contains('open')) {
+        closeSecretsModal();
+      }
+    });
 
     // ── Init: restore last conversation or start fresh ──
     (async function init() {

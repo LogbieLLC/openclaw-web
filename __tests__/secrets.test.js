@@ -34,6 +34,36 @@ const TOKEN_HEADERS = {
   'Content-Type': 'application/json',
 };
 
+describe('GET /api/secrets', () => {
+  test('returns list of SECRET_* var names (not values)', async () => {
+    const res = await request(app)
+      .get('/api/secrets')
+      .set('Cookie', `csrf_token=${TOKEN}`)
+      .set('X-CSRF-Token', TOKEN)
+      .set('X-Requested-With', 'XMLHttpRequest');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('secrets');
+    expect(Array.isArray(res.body.secrets)).toBe(true);
+    // Should include the ones we set in beforeAll
+    expect(res.body.secrets).toContain('SECRET_MY_KEY');
+    expect(res.body.secrets).toContain('SECRET_ANOTHER');
+    // Values must NOT be present anywhere in the response body
+    expect(JSON.stringify(res.body)).not.toContain('supersecret123');
+    expect(JSON.stringify(res.body)).not.toContain('another-value');
+    // OPENCLAW_TOKEN must never appear
+    expect(res.body.secrets).not.toContain('OPENCLAW_TOKEN');
+  });
+
+  test('rejects request without CSRF token → 403', async () => {
+    const res = await request(app)
+      .get('/api/secrets')
+      .set('X-Requested-With', 'XMLHttpRequest');
+
+    expect(res.status).toBe(403);
+  });
+});
+
 describe('Secret injection — /api/chat', () => {
   test('rejects {{VAR}} without SECRET_ prefix → 400', async () => {
     const res = await request(app)
