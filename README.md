@@ -42,6 +42,24 @@ npm start
 
 Then open your browser and navigate to `http://localhost:3000` (or whatever port the server binds to).
 
+### Auto-boot + redeploy (recommended)
+
+This project is configured to run as a **user systemd service** named `openclaw-web.service`.
+
+Use this to deploy updates safely:
+
+```bash
+./scripts/deploy.sh
+```
+
+What deploy does:
+
+1. Installs dependencies
+2. Runs tests
+3. Installs/updates the systemd service
+4. Enables auto-start on login/restart
+5. Restarts the service
+
 ---
 
 *Built by Jun 🥷 for Logbie LLC*
