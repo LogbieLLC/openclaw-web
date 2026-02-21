@@ -146,6 +146,39 @@ app.get('/api/csrf-token', (req, res) => {
   res.json({ token });
 });
 
+// ── .env file helpers ──
+const ENV_FILE = path.join(__dirname, '.env');
+const SECRET_NAME_RE = /^SECRET_[A-Z0-9_]+$/;
+
+function readEnvFile() {
+  try { return fs.readFileSync(ENV_FILE, 'utf-8'); }
+  catch { return ''; }
+}
+
+function writeSecretToEnvFile(name, value) {
+  const raw = readEnvFile();
+  const lines = raw.split('\n');
+  const escaped = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  const newLine = `${name}="${escaped}"`;
+
+  let found = false;
+  const updated = lines.map(line => {
+    // Match KEY= or KEY ="..." or KEY='...' at start of line (skip comments)
+    if (/^\s*#/.test(line) || !/=/.test(line)) return line;
+    const key = line.split('=')[0].trim();
+    if (key === name) { found = true; return newLine; }
+    return line;
+  });
+
+  if (!found) {
+    // Append, with a blank line separator if file isn't empty
+    if (updated.length && updated[updated.length - 1].trim() !== '') updated.push('');
+    updated.push(newLine);
+  }
+
+  fs.writeFileSync(ENV_FILE, updated.join('\n'), 'utf-8');
+}
+
 // ── Secrets list endpoint ──
 // Returns the NAMES of available SECRET_* env vars (never the values).
 // Requires CSRF + origin check so random sites can't enumerate your secrets.
@@ -154,6 +187,35 @@ app.get('/api/secrets', originCheck, csrf.validate, (_req, res) => {
     .filter(k => k.startsWith(SECRET_PREFIX))
     .sort();
   res.json({ secrets: names });
+});
+
+// ── Add/update secret endpoint ──
+// Writes a new SECRET_* var to .env and hot-loads it into process.env.
+app.post('/api/secrets', originCheck, csrf.validate, (req, res) => {
+  const { name, value } = req.body || {};
+
+  if (!name || typeof name !== 'string' || !SECRET_NAME_RE.test(name.trim())) {
+    return res.status(400).json({
+      error: 'Invalid name. Must match SECRET_[A-Z0-9_]+ (uppercase, no spaces).',
+    });
+  }
+
+  if (value === undefined || value === null || String(value).length === 0) {
+    return res.status(400).json({ error: 'Value cannot be empty.' });
+  }
+
+  const safeName  = name.trim();
+  const safeValue = String(value);
+
+  try {
+    writeSecretToEnvFile(safeName, safeValue);
+    process.env[safeName] = safeValue; // hot-load — no restart needed
+  } catch (err) {
+    console.error('Failed to write .env:', err);
+    return res.status(500).json({ error: 'Could not save secret: ' + err.message });
+  }
+
+  res.json({ ok: true, name: safeName });
 });
 
 // ── File upload endpoint ──

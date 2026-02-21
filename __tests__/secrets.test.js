@@ -8,16 +8,36 @@
  */
 
 const request = require('supertest');
+const path = require('path');
+const fs = require('fs');
 
 // We need to control process.env before requiring app,
 // so set vars here first.
 const TOKEN = 'test-csrf-token-secrets';
+
+// Use a temp .env file so tests don't touch the real one
+const TEST_ENV_PATH = path.join(__dirname, '..', '.env.test-tmp');
 
 beforeAll(() => {
   process.env.SECRET_MY_KEY = 'supersecret123';
   process.env.SECRET_ANOTHER = 'another-value';
   // Ensure sensitive built-ins cannot be leaked
   process.env.OPENCLAW_TOKEN = 'must-not-leak';
+});
+
+afterAll(() => {
+  // Clean up temp .env file if created by the POST tests
+  if (fs.existsSync(TEST_ENV_PATH)) fs.unlinkSync(TEST_ENV_PATH);
+  // Also clean up the real one if tests accidentally wrote to it
+  const realEnv = path.join(__dirname, '..', '.env');
+  if (fs.existsSync(realEnv)) {
+    const content = fs.readFileSync(realEnv, 'utf-8');
+    if (content.includes('SECRET_TEST_NEW_VAR')) {
+      // Remove test-written lines
+      const cleaned = content.split('\n').filter(l => !l.startsWith('SECRET_TEST_NEW_VAR')).join('\n');
+      fs.writeFileSync(realEnv, cleaned, 'utf-8');
+    }
+  }
 });
 
 // Lazy-require app after env is set
@@ -61,6 +81,77 @@ describe('GET /api/secrets', () => {
       .set('X-Requested-With', 'XMLHttpRequest');
 
     expect(res.status).toBe(403);
+  });
+});
+
+describe('POST /api/secrets', () => {
+  const HEADERS = {
+    Cookie: `csrf_token=${TOKEN}`,
+    'X-CSRF-Token': TOKEN,
+    'X-Requested-With': 'XMLHttpRequest',
+    'Content-Type': 'application/json',
+  };
+
+  test('saves a new SECRET_* var and hot-loads into process.env', async () => {
+    const res = await request(app)
+      .post('/api/secrets')
+      .set(HEADERS)
+      .send({ name: 'SECRET_TEST_NEW_VAR', value: 'hello-world' });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ ok: true, name: 'SECRET_TEST_NEW_VAR' });
+    // Verify it was hot-loaded into process.env
+    expect(process.env.SECRET_TEST_NEW_VAR).toBe('hello-world');
+  });
+
+  test('rejects names without SECRET_ prefix → 400', async () => {
+    const res = await request(app)
+      .post('/api/secrets')
+      .set(HEADERS)
+      .send({ name: 'MY_KEY', value: 'val' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/invalid name/i);
+  });
+
+  test('rejects lowercase / invalid characters in name → 400', async () => {
+    const res = await request(app)
+      .post('/api/secrets')
+      .set(HEADERS)
+      .send({ name: 'SECRET_my key!', value: 'val' });
+
+    expect(res.status).toBe(400);
+  });
+
+  test('rejects empty value → 400', async () => {
+    const res = await request(app)
+      .post('/api/secrets')
+      .set(HEADERS)
+      .send({ name: 'SECRET_EMPTY_VAL', value: '' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/empty/i);
+  });
+
+  test('rejects without CSRF token → 403', async () => {
+    const res = await request(app)
+      .post('/api/secrets')
+      .set('X-Requested-With', 'XMLHttpRequest')
+      .set('Content-Type', 'application/json')
+      .send({ name: 'SECRET_FOO', value: 'bar' });
+
+    expect(res.status).toBe(403);
+  });
+
+  test('updating an existing var overwrites it', async () => {
+    // First write
+    await request(app).post('/api/secrets').set(HEADERS).send({ name: 'SECRET_UPDATE_ME', value: 'v1' });
+    expect(process.env.SECRET_UPDATE_ME).toBe('v1');
+
+    // Second write — should overwrite
+    const res = await request(app).post('/api/secrets').set(HEADERS).send({ name: 'SECRET_UPDATE_ME', value: 'v2' });
+    expect(res.status).toBe(200);
+    expect(process.env.SECRET_UPDATE_ME).toBe('v2');
   });
 });
 

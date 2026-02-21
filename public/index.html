@@ -486,6 +486,115 @@
       text-decoration: none;
     }
 
+    /* ── Add-secret section ── */
+    #secrets-add-section {
+      border-top: 1px solid var(--border);
+      padding: 10px 10px 14px;
+      flex-shrink: 0;
+    }
+
+    #secrets-add-toggle {
+      width: 100%;
+      background: none;
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      color: var(--text-muted);
+      font-size: 13px;
+      padding: 8px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    #secrets-add-toggle:hover { border-color: var(--accent); color: var(--text); }
+
+    #secrets-add-form {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .saf-row {
+      display: flex;
+      align-items: center;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .saf-prefix {
+      padding: 0 8px;
+      font-size: 12px;
+      font-family: monospace;
+      color: var(--accent);
+      white-space: nowrap;
+      flex-shrink: 0;
+      user-select: none;
+    }
+
+    #saf-name {
+      flex: 1;
+      background: none;
+      border: none;
+      outline: none;
+      padding: 9px 10px 9px 0;
+      color: var(--text);
+      font-size: 13px;
+      font-family: monospace;
+      width: 100%;
+    }
+
+    #saf-value {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 12px;
+      color: var(--text);
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+      width: 100%;
+      transition: border-color 0.15s;
+    }
+    #saf-value:focus { border-color: var(--accent); }
+
+    .saf-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .saf-actions button {
+      padding: 7px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-family: inherit;
+      cursor: pointer;
+      border: none;
+      transition: background 0.15s;
+    }
+
+    #saf-cancel {
+      background: var(--surface2);
+      color: var(--text-muted);
+    }
+    #saf-cancel:hover { color: var(--text); background: var(--border); }
+
+    #saf-save {
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+    }
+    #saf-save:hover { background: var(--send-hover); }
+    #saf-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    #saf-error {
+      font-size: 12px;
+      color: #f66;
+      padding: 2px 4px;
+    }
+
     /* Secret lock button */
     #secret-btn {
       width: 42px;
@@ -666,11 +775,28 @@
       <div id="secrets-overlay" role="dialog" aria-modal="true" aria-label="Insert secret">
         <div id="secrets-modal">
           <div id="secrets-header">
-            <h2>🔒 Insert Secret</h2>
+            <h2>🔒 Secrets</h2>
             <button id="secrets-close" title="Close" aria-label="Close">×</button>
           </div>
           <p id="secrets-hint">Click a variable to insert it at your cursor. The actual value is never shown in chat.</p>
           <div id="secrets-list"></div>
+
+          <!-- Add new secret -->
+          <div id="secrets-add-section">
+            <button id="secrets-add-toggle" type="button">＋ Add new secret</button>
+            <div id="secrets-add-form" hidden>
+              <div class="saf-row">
+                <span class="saf-prefix">SECRET_</span>
+                <input id="saf-name" type="text" placeholder="VAR_NAME" autocomplete="off" spellcheck="false" />
+              </div>
+              <input id="saf-value" type="password" placeholder="Secret value" autocomplete="new-password" />
+              <div class="saf-actions">
+                <button id="saf-cancel" type="button">Cancel</button>
+                <button id="saf-save" type="button">Save</button>
+              </div>
+              <div id="saf-error" hidden></div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1206,8 +1332,31 @@
     const secretsClose   = document.getElementById('secrets-close');
     const secretBtn      = document.getElementById('secret-btn');
 
+    function renderSecretsList(secrets) {
+      secretsList.innerHTML = '';
+      if (!secrets || secrets.length === 0) {
+        const empty = document.createElement('div');
+        empty.id = 'secrets-empty';
+        empty.innerHTML = 'No secrets yet.<br>Add one below ↓';
+        secretsList.appendChild(empty);
+        return;
+      }
+      for (const name of secrets) {
+        const btn = document.createElement('button');
+        btn.className = 'secret-item';
+        btn.innerHTML = `
+          <span class="si-icon">🔒</span>
+          <span class="si-name">${name}</span>
+          <span class="si-hint">click to insert</span>
+        `;
+        btn.addEventListener('click', () => insertSecret(name));
+        secretsList.appendChild(btn);
+      }
+    }
+
     function openSecretsModal() {
-      secretsList.innerHTML = '<div id="secrets-empty" style="color:var(--text-muted);padding:20px 16px;text-align:center;font-size:13px;">Loading…</div>';
+      secretsList.innerHTML = '<div style="color:var(--text-muted);padding:20px 16px;text-align:center;font-size:13px;">Loading…</div>';
+      hideAddForm();
       secretsOverlay.classList.add('open');
 
       fetch('/api/secrets', {
@@ -1217,34 +1366,15 @@
         },
       })
         .then(r => r.json())
-        .then(({ secrets }) => {
-          secretsList.innerHTML = '';
-          if (!secrets || secrets.length === 0) {
-            const empty = document.createElement('div');
-            empty.id = 'secrets-empty';
-            empty.innerHTML = 'No <code>SECRET_*</code> env vars found.<br>Add them to your <code>.env</code> file.';
-            secretsList.appendChild(empty);
-            return;
-          }
-          for (const name of secrets) {
-            const btn = document.createElement('button');
-            btn.className = 'secret-item';
-            btn.innerHTML = `
-              <span class="si-icon">🔒</span>
-              <span class="si-name">${name}</span>
-              <span class="si-hint">click to insert</span>
-            `;
-            btn.addEventListener('click', () => insertSecret(name));
-            secretsList.appendChild(btn);
-          }
-        })
+        .then(({ secrets }) => renderSecretsList(secrets))
         .catch(() => {
-          secretsList.innerHTML = '<div id="secrets-empty" style="color:#f66;padding:20px 16px;text-align:center;font-size:13px;">⚠️ Could not load secrets</div>';
+          secretsList.innerHTML = '<div style="color:#f66;padding:20px 16px;text-align:center;font-size:13px;">⚠️ Could not load secrets</div>';
         });
     }
 
     function closeSecretsModal() {
       secretsOverlay.classList.remove('open');
+      hideAddForm();
     }
 
     function insertSecret(name) {
@@ -1273,6 +1403,99 @@
       if (e.key === 'Escape' && secretsOverlay.classList.contains('open')) {
         closeSecretsModal();
       }
+    });
+
+    // ── Add-secret form ──
+    const addToggle  = document.getElementById('secrets-add-toggle');
+    const addForm    = document.getElementById('secrets-add-form');
+    const safName    = document.getElementById('saf-name');
+    const safValue   = document.getElementById('saf-value');
+    const safSave    = document.getElementById('saf-save');
+    const safCancel  = document.getElementById('saf-cancel');
+    const safError   = document.getElementById('saf-error');
+
+    function showAddForm() {
+      addForm.hidden = false;
+      addToggle.hidden = true;
+      safName.value = '';
+      safValue.value = '';
+      safError.hidden = true;
+      safError.textContent = '';
+      safName.focus();
+    }
+
+    function hideAddForm() {
+      addForm.hidden = true;
+      addToggle.hidden = false;
+    }
+
+    // Auto-uppercase the name field
+    safName.addEventListener('input', () => {
+      const pos = safName.selectionStart;
+      safName.value = safName.value.toUpperCase().replace(/[^A-Z0-9_]/g, '');
+      safName.setSelectionRange(pos, pos);
+    });
+
+    addToggle.addEventListener('click', showAddForm);
+    safCancel.addEventListener('click', hideAddForm);
+
+    safSave.addEventListener('click', async () => {
+      const name  = ('SECRET_' + safName.value.trim()).replace(/SECRET_SECRET_/, 'SECRET_'); // guard against double-prefix
+      const value = safValue.value;
+
+      if (!safName.value.trim()) {
+        safError.textContent = 'Name is required.';
+        safError.hidden = false;
+        return;
+      }
+      if (!value) {
+        safError.textContent = 'Value is required.';
+        safError.hidden = false;
+        return;
+      }
+
+      safSave.disabled = true;
+      safError.hidden = true;
+
+      try {
+        const res = await fetch('/api/secrets', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+          body: JSON.stringify({ name, value }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          safError.textContent = data.error || 'Save failed.';
+          safError.hidden = false;
+          return;
+        }
+
+        // Success — collapse form, refresh list
+        hideAddForm();
+        // Re-fetch list to show newly added secret
+        fetch('/api/secrets', {
+          headers: { 'X-CSRF-Token': csrfToken, 'X-Requested-With': 'XMLHttpRequest' },
+        })
+          .then(r => r.json())
+          .then(({ secrets }) => renderSecretsList(secrets))
+          .catch(() => {});
+
+      } catch (err) {
+        safError.textContent = 'Network error: ' + err.message;
+        safError.hidden = false;
+      } finally {
+        safSave.disabled = false;
+      }
+    });
+
+    // Enter key in value field → save
+    safValue.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); safSave.click(); }
     });
 
     // ── Init: restore last conversation or start fresh ──
