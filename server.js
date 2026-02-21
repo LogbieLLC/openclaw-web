@@ -8,6 +8,8 @@ const OPENCLAW_TOKEN = process.env.OPENCLAW_TOKEN || '';
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+app.get('/health', (_req, res) => res.json({ ok: true }));
+
 app.post('/api/chat', async (req, res) => {
   const { messages, sessionId } = req.body;
 

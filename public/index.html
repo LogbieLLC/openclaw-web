@@ -751,6 +751,54 @@
         startNewChat();
       }
     })();
+
+    // ── Health-check poller: auto-reload on backend restart ──
+    (function healthPoller() {
+      let serverState = 'up';
+      let banner = null;
+
+      function showBanner() {
+        if (banner) return;
+        banner = document.createElement('div');
+        banner.id = 'health-banner';
+        banner.textContent = '\uD83D\uDD34 Server disconnected — reconnecting…';
+        Object.assign(banner.style, {
+          position: 'fixed',
+          top: '0',
+          left: '0',
+          right: '0',
+          zIndex: '9999',
+          padding: '8px 16px',
+          background: 'var(--surface)',
+          borderBottom: '1px solid var(--border)',
+          color: 'var(--text-muted)',
+          fontSize: '13px',
+          textAlign: 'center',
+        });
+        document.body.appendChild(banner);
+      }
+
+      function removeBanner() {
+        if (banner) { banner.remove(); banner = null; }
+      }
+
+      async function poll() {
+        try {
+          const res = await fetch('/health');
+          if (!res.ok) throw new Error('non-200');
+          if (serverState === 'down') {
+            window.location.reload();
+            return;
+          }
+          serverState = 'up';
+        } catch {
+          serverState = 'down';
+          showBanner();
+        }
+      }
+
+      setInterval(poll, 3000);
+    })();
   </script>
 </body>
 </html>
