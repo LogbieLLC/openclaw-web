@@ -13,25 +13,42 @@ const OPENCLAW_URL = process.env.OPENCLAW_URL || 'http://127.0.0.1:18789/v1/chat
 const OPENCLAW_TOKEN = process.env.OPENCLAW_TOKEN || '';
 
 // ── Secret injection ──
-// Only env vars with this prefix can be injected via {{VAR_NAME}} syntax.
-// Example: set SECRET_OPENAI_KEY=sk-... in .env, then type {{SECRET_OPENAI_KEY}} in chat.
+// Two syntaxes:
+//   {{SECRET_VAR}}  → "[SECRET_VAR: <actual value>]"  (name + value; Jun knows both)
+//   {SECRET_VAR}    → "SECRET_VAR"                    (name only; value stays in webchat)
+//
+// Only vars with SECRET_ prefix are allowed.
 const SECRET_PREFIX = 'SECRET_';
-const SECRET_PATTERN = /\{\{([A-Z][A-Z0-9_]*)\}\}/g;
+
+// Matches {{VAR}} (group 1) or {VAR} (group 2). Double-brace alternative is first
+// so {{VAR}} never gets partially matched by the single-brace branch.
+const SECRET_PATTERN = /\{\{([A-Z][A-Z0-9_]*)\}\}|\{([A-Z][A-Z0-9_]*)\}/g;
 
 function resolveSecrets(text) {
   const missing = [];
   const notAllowed = [];
-  const resolved = text.replace(SECRET_PATTERN, (_match, varName) => {
+  SECRET_PATTERN.lastIndex = 0;
+  const resolved = text.replace(SECRET_PATTERN, (_match, doubleVar, singleVar) => {
+    const varName = doubleVar || singleVar;
+    const isDouble = Boolean(doubleVar); // true → send name+value; false → send name only
+
     if (!varName.startsWith(SECRET_PREFIX)) {
       notAllowed.push(varName);
-      return _match; // leave unchanged
+      return _match;
     }
+
+    if (!isDouble) {
+      // Name-only reference — no value lookup, just send the label
+      return varName;
+    }
+
+    // Double-brace: look up and embed value
     const value = process.env[varName];
     if (value === undefined) {
       missing.push(varName);
-      return _match; // leave unchanged
+      return _match;
     }
-    return value;
+    return `[${varName}: ${value}]`;
   });
   return { resolved, missing, notAllowed };
 }

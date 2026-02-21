@@ -447,31 +447,55 @@
       display: flex;
       align-items: center;
       gap: 10px;
-      padding: 9px 12px;
+      padding: 7px 12px;
       background: var(--surface2);
       border: 1px solid var(--border);
       border-radius: 8px;
-      cursor: pointer;
-      transition: border-color 0.12s, background 0.12s;
       font-size: 13px;
       font-family: monospace;
       color: var(--text);
-      text-align: left;
       width: 100%;
     }
 
-    .secret-item:hover {
-      border-color: var(--accent);
-      background: rgba(124, 106, 247, 0.08);
-      color: #c4baff;
+    .secret-item .si-icon { font-size: 14px; flex-shrink: 0; }
+    .secret-item .si-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .secret-item .si-actions {
+      display: flex;
+      gap: 5px;
+      flex-shrink: 0;
     }
 
-    .secret-item .si-icon { font-size: 14px; flex-shrink: 0; }
-    .secret-item .si-name { flex: 1; }
-    .secret-item .si-hint {
+    .si-action-btn {
+      padding: 3px 9px;
+      border-radius: 5px;
       font-size: 11px;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: background 0.12s, border-color 0.12s, color 0.12s;
+      white-space: nowrap;
+    }
+
+    .si-action-value {
+      background: rgba(124, 106, 247, 0.2);
+      border-color: rgba(124, 106, 247, 0.5);
+      color: #c4baff;
+    }
+    .si-action-value:hover {
+      background: rgba(124, 106, 247, 0.35);
+      color: #fff;
+    }
+
+    .si-action-ref {
+      background: transparent;
+      border-color: var(--border);
+      border-style: dashed;
       color: var(--text-muted);
+    }
+    .si-action-ref:hover {
+      border-color: rgba(124, 106, 247, 0.4);
+      color: var(--text);
     }
 
     #secrets-empty {
@@ -617,7 +641,7 @@
       border-color: var(--accent);
     }
 
-    /* Secret token chip */
+    /* Secret token chip — name + value */
     .secret-token {
       display: inline-flex;
       align-items: center;
@@ -631,6 +655,14 @@
       color: #a89fff;
       white-space: nowrap;
       vertical-align: middle;
+    }
+
+    /* Name-only reference chip — dimmer, dashed border */
+    .secret-token-ref {
+      background: transparent;
+      border-style: dashed;
+      border-color: rgba(124, 106, 247, 0.3);
+      color: #7a6fc0;
     }
 
     /* Attachment button */
@@ -1028,19 +1060,21 @@
       }
     }
 
-    // Render text with {{SECRET_VAR}} replaced by a visual chip.
-    // Returns true if any secrets were found.
-    const SECRET_DISPLAY_RE = /\{\{([A-Z][A-Z0-9_]*)\}\}/g;
+    // Render text with {{SECRET_VAR}} and {SECRET_VAR} replaced by visual chips.
+    // {{VAR}} → filled chip (name + value sent)
+    // {VAR}   → outlined chip (name-only reference)
+    // Matches double-brace first so {{VAR}} is never partially consumed by {VAR}.
+    const SECRET_DISPLAY_RE = /\{\{([A-Z][A-Z0-9_]*)\}\}|\{([A-Z][A-Z0-9_]*)\}/g;
 
     function renderWithSecrets(bubble, text) {
-      // Split on {{VAR}} tokens
       const parts = [];
       let last = 0;
       let m;
       SECRET_DISPLAY_RE.lastIndex = 0;
       while ((m = SECRET_DISPLAY_RE.exec(text)) !== null) {
         if (m.index > last) parts.push({ type: 'text', value: text.slice(last, m.index) });
-        parts.push({ type: 'secret', name: m[1] });
+        const isDouble = Boolean(m[1]);
+        parts.push({ type: 'secret', name: m[1] || m[2], withValue: isDouble });
         last = m.index + m[0].length;
       }
       if (last < text.length) parts.push({ type: 'text', value: text.slice(last) });
@@ -1051,8 +1085,10 @@
           bubble.appendChild(document.createTextNode(part.value));
         } else {
           const chip = document.createElement('span');
-          chip.className = 'secret-token';
-          chip.title = `Secret: ${part.name} — actual value sent to Jun`;
+          chip.className = 'secret-token' + (part.withValue ? '' : ' secret-token-ref');
+          chip.title = part.withValue
+            ? `Secret: ${part.name} — name + value sent to Jun`
+            : `Secret reference: ${part.name} — name only (value stays here)`;
           chip.textContent = `🔒 ${part.name}`;
           bubble.appendChild(chip);
         }
@@ -1342,15 +1378,38 @@
         return;
       }
       for (const name of secrets) {
-        const btn = document.createElement('button');
-        btn.className = 'secret-item';
-        btn.innerHTML = `
-          <span class="si-icon">🔒</span>
-          <span class="si-name">${name}</span>
-          <span class="si-hint">click to insert</span>
-        `;
-        btn.addEventListener('click', () => insertSecret(name));
-        secretsList.appendChild(btn);
+        const row = document.createElement('div');
+        row.className = 'secret-item';
+
+        const icon = document.createElement('span');
+        icon.className = 'si-icon';
+        icon.textContent = '🔒';
+        row.appendChild(icon);
+
+        const label = document.createElement('span');
+        label.className = 'si-name';
+        label.textContent = name;
+        row.appendChild(label);
+
+        const actions = document.createElement('span');
+        actions.className = 'si-actions';
+
+        const btnValue = document.createElement('button');
+        btnValue.className = 'si-action-btn si-action-value';
+        btnValue.textContent = '+ value';
+        btnValue.title = 'Insert name + value — Jun sees both';
+        btnValue.addEventListener('click', () => insertSecret(`{{${name}}}`));
+        actions.appendChild(btnValue);
+
+        const btnName = document.createElement('button');
+        btnName.className = 'si-action-btn si-action-ref';
+        btnName.textContent = 'name only';
+        btnName.title = 'Insert name reference — Jun sees the label, not the value';
+        btnName.addEventListener('click', () => insertSecret(`{${name}}`));
+        actions.appendChild(btnName);
+
+        row.appendChild(actions);
+        secretsList.appendChild(row);
       }
     }
 
@@ -1377,8 +1436,7 @@
       hideAddForm();
     }
 
-    function insertSecret(name) {
-      const token = `{{${name}}}`;
+    function insertSecret(token) {
       const start = inputEl.selectionStart;
       const end   = inputEl.selectionEnd;
       const val   = inputEl.value;

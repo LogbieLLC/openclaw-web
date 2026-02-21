@@ -156,6 +156,8 @@ describe('POST /api/secrets', () => {
 });
 
 describe('Secret injection — /api/chat', () => {
+  // ── Double-brace {{VAR}} tests ──
+
   test('rejects {{VAR}} without SECRET_ prefix → 400', async () => {
     const res = await request(app)
       .post('/api/chat')
@@ -163,6 +165,35 @@ describe('Secret injection — /api/chat', () => {
       .send({
         sessionId: 'test-session',
         messages: [{ role: 'user', content: 'my token is {{OPENCLAW_TOKEN}}' }],
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/not allowed/i);
+  });
+
+  // ── Single-brace {VAR} tests (name-only reference) ──
+
+  test('{SECRET_VAR} name-only: passes through without value lookup', async () => {
+    // Even a var that doesn't exist in process.env should NOT cause 400
+    const res = await request(app)
+      .post('/api/chat')
+      .set(TOKEN_HEADERS)
+      .send({
+        sessionId: 'test-session',
+        messages: [{ role: 'user', content: 'use {SECRET_NONEXISTENT_VAR} for this task' }],
+      });
+
+    // Should not be a 400 from secret validation
+    expect(res.status).not.toBe(400);
+  });
+
+  test('{VAR} without SECRET_ prefix → 400 (single-brace also enforces prefix)', async () => {
+    const res = await request(app)
+      .post('/api/chat')
+      .set(TOKEN_HEADERS)
+      .send({
+        sessionId: 'test-session',
+        messages: [{ role: 'user', content: 'ref: {OPENCLAW_TOKEN}' }],
       });
 
     expect(res.status).toBe(400);
