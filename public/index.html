@@ -406,6 +406,28 @@
   </div>
 
   <script>
+    // ── CSRF helpers ──
+    let csrfToken = '';
+
+    function getCookieValue(name) {
+      const match = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+      return match ? match.pop() : '';
+    }
+
+    async function initCsrf() {
+      // Prefer cookie (already set by server); fall back to endpoint
+      csrfToken = getCookieValue('csrf_token');
+      if (!csrfToken) {
+        try {
+          const r = await fetch('/api/csrf-token');
+          const data = await r.json();
+          csrfToken = data.token || getCookieValue('csrf_token');
+        } catch (e) {
+          console.warn('Could not fetch CSRF token:', e);
+        }
+      }
+    }
+
     // ── DOM refs ──
     const messagesEl   = document.getElementById('messages');
     const inputEl      = document.getElementById('input');
@@ -664,7 +686,10 @@
       try {
         const res = await fetch('/api/chat', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': csrfToken,
+          },
           body: JSON.stringify({ messages: history, sessionId: currentId }),
         });
 
@@ -737,7 +762,8 @@
     newChatBtn.addEventListener('click', startNewChat);
 
     // ── Init: restore last conversation or start fresh ──
-    (function init() {
+    (async function init() {
+      await initCsrf();
       if (conversations.length > 0) {
         // Remove empty conversations with no messages (stale new chats)
         conversations = conversations.filter(c => c.messages.length > 0);
