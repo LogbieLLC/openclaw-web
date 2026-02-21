@@ -12,6 +12,59 @@ const csrf = require('./middleware/csrf');
 const OPENCLAW_URL = process.env.OPENCLAW_URL || 'http://127.0.0.1:18789/v1/chat/completions';
 const OPENCLAW_TOKEN = process.env.OPENCLAW_TOKEN || '';
 
+// ── Secret injection ──
+// Only env vars with this prefix can be injected via {{VAR_NAME}} syntax.
+// Example: set SECRET_OPENAI_KEY=sk-... in .env, then type {{SECRET_OPENAI_KEY}} in chat.
+const SECRET_PREFIX = 'SECRET_';
+const SECRET_PATTERN = /\{\{([A-Z][A-Z0-9_]*)\}\}/g;
+
+function resolveSecrets(text) {
+  const missing = [];
+  const notAllowed = [];
+  const resolved = text.replace(SECRET_PATTERN, (_match, varName) => {
+    if (!varName.startsWith(SECRET_PREFIX)) {
+      notAllowed.push(varName);
+      return _match; // leave unchanged
+    }
+    const value = process.env[varName];
+    if (value === undefined) {
+      missing.push(varName);
+      return _match; // leave unchanged
+    }
+    return value;
+  });
+  return { resolved, missing, notAllowed };
+}
+
+// Apply secret resolution to all user message strings in a messages array.
+// Returns { messages, errors } where errors is an array of human-readable strings.
+function injectSecrets(messages) {
+  const errors = [];
+  const out = messages.map(msg => {
+    if (msg.role !== 'user') return msg;
+    if (typeof msg.content === 'string') {
+      const { resolved, missing, notAllowed } = resolveSecrets(msg.content);
+      if (notAllowed.length) errors.push(`Variable(s) not allowed (must start with SECRET_): ${notAllowed.join(', ')}`);
+      if (missing.length) errors.push(`Secret env var(s) not found: ${missing.join(', ')}`);
+      return { ...msg, content: resolved };
+    }
+    if (Array.isArray(msg.content)) {
+      const parts = msg.content.map(part => {
+        if (part.type === 'text' && typeof part.text === 'string') {
+          const { resolved, missing, notAllowed } = resolveSecrets(part.text);
+          if (notAllowed.length) errors.push(`Variable(s) not allowed (must start with SECRET_): ${notAllowed.join(', ')}`);
+          if (missing.length) errors.push(`Secret env var(s) not found: ${missing.join(', ')}`);
+          return { ...part, text: resolved };
+        }
+        return part;
+      });
+      return { ...msg, content: parts };
+    }
+    return msg;
+  });
+  return { messages: out, errors };
+}
+
 const app = express();
 
 // Trust proxy headers (so req.ip reflects the real client IP behind a reverse proxy)
@@ -126,8 +179,14 @@ app.post('/api/upload', originCheck, csrf.validate, (req, res) => {
 app.post('/api/chat', originCheck, csrf.validate, async (req, res) => {
   const { messages, sessionId, attachments } = req.body;
 
+  // Resolve {{SECRET_VAR}} placeholders in user messages
+  const { messages: secretResolved, errors: secretErrors } = injectSecrets(messages);
+  if (secretErrors.length) {
+    return res.status(400).json({ error: secretErrors.join('; ') });
+  }
+
   // Build message array, injecting attachments into the last user message
-  let finalMessages = messages;
+  let finalMessages = secretResolved;
   if (Array.isArray(attachments) && attachments.length > 0) {
     finalMessages = [...messages];
     const lastUserIdx = finalMessages.map(m => m.role).lastIndexOf('user');

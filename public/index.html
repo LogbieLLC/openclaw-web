@@ -351,6 +351,22 @@
 
     #empty-state .icon { font-size: 48px; margin-bottom: 8px; }
 
+    /* Secret token chip */
+    .secret-token {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 1px 7px;
+      background: rgba(124, 106, 247, 0.18);
+      border: 1px solid rgba(124, 106, 247, 0.4);
+      border-radius: 6px;
+      font-size: 12px;
+      font-family: monospace;
+      color: #a89fff;
+      white-space: nowrap;
+      vertical-align: middle;
+    }
+
     /* Attachment button */
     #attach-btn {
       width: 42px;
@@ -498,7 +514,7 @@
             <path d="M16.5 6v11.5a4 4 0 0 1-8 0V5a2.5 2.5 0 0 1 5 0v10.5a1 1 0 0 1-2 0V6h-1.5v9.5a2.5 2.5 0 0 0 5 0V5a4 4 0 0 0-8 0v12.5a5.5 5.5 0 0 0 11 0V6H16.5z"/>
           </svg>
         </button>
-        <textarea id="input" rows="1" placeholder="Message Jun…"></textarea>
+        <textarea id="input" rows="1" placeholder="Message Jun… (use {{SECRET_VAR}} to inject secrets)"></textarea>
         <button id="send-btn" title="Send">
           <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
@@ -716,6 +732,37 @@
       }
     }
 
+    // Render text with {{SECRET_VAR}} replaced by a visual chip.
+    // Returns true if any secrets were found.
+    const SECRET_DISPLAY_RE = /\{\{([A-Z][A-Z0-9_]*)\}\}/g;
+
+    function renderWithSecrets(bubble, text) {
+      // Split on {{VAR}} tokens
+      const parts = [];
+      let last = 0;
+      let m;
+      SECRET_DISPLAY_RE.lastIndex = 0;
+      while ((m = SECRET_DISPLAY_RE.exec(text)) !== null) {
+        if (m.index > last) parts.push({ type: 'text', value: text.slice(last, m.index) });
+        parts.push({ type: 'secret', name: m[1] });
+        last = m.index + m[0].length;
+      }
+      if (last < text.length) parts.push({ type: 'text', value: text.slice(last) });
+
+      bubble.textContent = '';
+      for (const part of parts) {
+        if (part.type === 'text') {
+          bubble.appendChild(document.createTextNode(part.value));
+        } else {
+          const chip = document.createElement('span');
+          chip.className = 'secret-token';
+          chip.title = `Secret: ${part.name} — actual value sent to Jun`;
+          chip.textContent = `🔒 ${part.name}`;
+          bubble.appendChild(chip);
+        }
+      }
+    }
+
     function appendMessage(role, text, silent) {
       const empty = document.getElementById('empty-state');
       if (empty) empty.remove();
@@ -731,7 +778,11 @@
 
       const bubble = document.createElement('div');
       bubble.className = 'bubble';
-      bubble.textContent = text;
+      if (role === 'user') {
+        renderWithSecrets(bubble, text);
+      } else {
+        bubble.textContent = text;
+      }
       div.appendChild(bubble);
 
       messagesEl.appendChild(div);
