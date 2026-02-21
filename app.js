@@ -9,6 +9,34 @@ const ipBlock = require('./middleware/ipBlock');
 const originCheck = require('./middleware/originCheck');
 const csrf = require('./middleware/csrf');
 
+// ── Load .env at startup ──
+// Secrets added via the modal are written to .env. This loads them into
+// process.env on startup so they survive service restarts.
+// Existing process.env vars (e.g. from systemd Environment= lines) are NOT overwritten.
+(function loadDotEnv() {
+  const envPath = path.join(__dirname, '.env');
+  let raw;
+  try { raw = fs.readFileSync(envPath, 'utf-8'); }
+  catch { return; } // no .env file — that's fine
+
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eqIdx = trimmed.indexOf('=');
+    if (eqIdx < 1) continue;
+    const key = trimmed.slice(0, eqIdx).trim();
+    let val = trimmed.slice(eqIdx + 1).trim();
+    // Strip surrounding quotes and unescape
+    if ((val.startsWith('"') && val.endsWith('"')) ||
+        (val.startsWith("'") && val.endsWith("'"))) {
+      val = val.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+    }
+    if (!(key in process.env)) {
+      process.env[key] = val; // don't clobber systemd-set vars
+    }
+  }
+})();
+
 const OPENCLAW_URL = process.env.OPENCLAW_URL || 'http://127.0.0.1:18789/v1/chat/completions';
 const OPENCLAW_TOKEN = process.env.OPENCLAW_TOKEN || '';
 
