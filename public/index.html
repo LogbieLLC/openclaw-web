@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Jun 🥷</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -28,12 +28,19 @@
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: var(--bg);
       color: var(--text);
+      -webkit-text-size-adjust: 100%;
+    }
+
+    body {
+      overscroll-behavior: none;
+      -webkit-tap-highlight-color: transparent;
     }
 
     /* Layout */
     #layout {
       display: flex;
-      height: 100vh;
+      height: calc(var(--vh, 1vh) * 100);
+      min-height: -webkit-fill-available;
     }
 
     /* Sidebar */
@@ -168,7 +175,7 @@
       display: flex;
       align-items: center;
       gap: 10px;
-      padding: 14px 20px;
+      padding: calc(12px + env(safe-area-inset-top, 0)) 16px 12px;
       background: var(--surface);
       border-bottom: 1px solid var(--border);
       flex-shrink: 0;
@@ -199,6 +206,27 @@
       content: '● ';
       color: #4caf50;
       font-size: 10px;
+    }
+
+
+    #header .spacer { flex: 1; }
+
+    #settings-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 16px;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+
+    #settings-btn:hover {
+      background: var(--surface2);
+      border-color: var(--accent);
+      color: var(--text);
     }
 
     /* Messages */
@@ -288,7 +316,7 @@
     #input-area {
       display: flex;
       gap: 8px;
-      padding: 12px 16px;
+      padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0));
       background: var(--surface);
       border-top: 1px solid var(--border);
       flex-shrink: 0;
@@ -301,7 +329,7 @@
       border-radius: 22px;
       padding: 10px 16px;
       color: var(--text);
-      font-size: 14px;
+      font-size: 16px;
       font-family: inherit;
       resize: none;
       outline: none;
@@ -315,8 +343,8 @@
     #input::placeholder { color: var(--text-muted); }
 
     #send-btn {
-      width: 42px;
-      height: 42px;
+      width: 44px;
+      height: 44px;
       flex-shrink: 0;
       background: var(--send-bg);
       border: none;
@@ -621,8 +649,8 @@
 
     /* Secret lock button */
     #secret-btn {
-      width: 42px;
-      height: 42px;
+      width: 44px;
+      height: 44px;
       flex-shrink: 0;
       background: transparent;
       border: 1px solid var(--border);
@@ -667,8 +695,8 @@
 
     /* Attachment button */
     #attach-btn {
-      width: 42px;
-      height: 42px;
+      width: 44px;
+      height: 44px;
       flex-shrink: 0;
       background: transparent;
       border: 1px solid var(--border);
@@ -758,10 +786,105 @@
       justify-content: center;
     }
 
+
+
+    /* Settings modal */
+    #settings-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      z-index: 220;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #settings-overlay.open { display: flex; }
+
+    #settings-modal {
+      width: min(460px, calc(100% - 24px));
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    #settings-modal h2 {
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .settings-row {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .settings-row label {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .settings-row input[type="text"], .settings-row select {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+    }
+
+    .settings-row input[type="checkbox"] { margin-right: 8px; }
+
+    #settings-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    #settings-actions button {
+      border: none;
+      border-radius: 8px;
+      padding: 8px 14px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    #settings-cancel { background: var(--surface2); color: var(--text-muted); }
+    #settings-save { background: var(--accent); color: white; font-weight: 600; }
+
+    .settings-danger {
+      border-top: 1px solid var(--border);
+      padding-top: 10px;
+      margin-top: 2px;
+      gap: 8px;
+    }
+
+    #settings-reset-conversations {
+      align-self: flex-start;
+      border: 1px solid rgba(255, 90, 90, 0.45);
+      background: rgba(255, 90, 90, 0.12);
+      color: #ff8f8f;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    #settings-reset-conversations:hover {
+      background: rgba(255, 90, 90, 0.2);
+    }
+
     .att-chip .att-remove:hover { color: #f44; background: rgba(255,255,255,0.08); }
 
     /* Responsive */
     @media (max-width: 600px) {
+      .message { max-width: 92%; }
+
       #sidebar {
         position: fixed;
         left: 0;
@@ -772,8 +895,14 @@
         transition: transform 0.2s ease;
       }
       #sidebar.open { transform: translateX(0); }
-      #sidebar-toggle { display: flex; }
-      #header { padding-left: 52px; }
+      #sidebar-toggle {
+        display: flex;
+        top: calc(10px + env(safe-area-inset-top, 0));
+        width: 40px;
+        height: 40px;
+      }
+      #header { padding-left: 56px; }
+      #messages { padding: 12px; }
     }
   </style>
 </head>
@@ -790,9 +919,11 @@
       <div id="header">
         <div class="avatar">🥷</div>
         <div class="info">
-          <h1>Jun Suzuki</h1>
+          <h1 id="header-name">Jun Suzuki</h1>
           <div class="status">online</div>
         </div>
+        <div class="spacer"></div>
+        <button id="settings-btn" title="Settings" aria-label="Settings">⚙️</button>
       </div>
 
       <div id="messages">
@@ -831,6 +962,32 @@
           </div>
         </div>
       </div>
+
+      <div id="settings-overlay" role="dialog" aria-modal="true" aria-label="Settings">
+        <div id="settings-modal">
+          <h2>Settings</h2>
+          <div class="settings-row">
+            <label for="settings-display-name">Assistant display name</label>
+            <input id="settings-display-name" type="text" maxlength="40" placeholder="Jun Suzuki" />
+          </div>
+          <div class="settings-row">
+            <label for="settings-emoji">Assistant emoji</label>
+            <input id="settings-emoji" type="text" maxlength="4" placeholder="🥷" />
+          </div>
+          <div class="settings-row">
+            <label><input id="settings-enter-to-send" type="checkbox" checked /> Press Enter to send (Shift+Enter for newline)</label>
+          </div>
+          <div class="settings-row settings-danger">
+            <label>Conversation history</label>
+            <button id="settings-reset-conversations" type="button">Clear all conversations</button>
+          </div>
+          <div id="settings-actions">
+            <button id="settings-cancel" type="button">Cancel</button>
+            <button id="settings-save" type="button">Save</button>
+          </div>
+        </div>
+      </div>
+
 
       <input type="file" id="file-input" hidden multiple
         accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.txt,.md,.csv,.json,image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,text/markdown,text/csv,application/json" />
@@ -887,6 +1044,16 @@
     const sidebarEl     = document.getElementById('sidebar');
     const sidebarToggle = document.getElementById('sidebar-toggle');
 
+    const settingsBtn   = document.getElementById('settings-btn');
+    const headerNameEl  = document.getElementById('header-name');
+    const settingsOverlay = document.getElementById('settings-overlay');
+    const settingsDisplayName = document.getElementById('settings-display-name');
+    const settingsEmoji = document.getElementById('settings-emoji');
+    const settingsEnterToSend = document.getElementById('settings-enter-to-send');
+    const settingsResetConversations = document.getElementById('settings-reset-conversations');
+    const settingsCancel = document.getElementById('settings-cancel');
+    const settingsSave = document.getElementById('settings-save');
+
     // ── State ──
     const STORE_KEY = 'jun_conversations';
     let conversations  = loadConversations();
@@ -895,7 +1062,56 @@
     let busy           = false;
     let pendingFiles   = []; // { file: File, previewUrl?: string }
 
-    // ── LocalStorage helpers ──
+    const SETTINGS_KEY = 'jun_settings';
+    let settings = {
+      displayName: 'Jun Suzuki',
+      emoji: '🥷',
+      enterToSend: true,
+    };
+
+    function loadSettings() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+        settings = {
+          ...settings,
+          ...saved,
+          displayName: (saved.displayName || settings.displayName).trim() || 'Jun Suzuki',
+          emoji: (saved.emoji || settings.emoji).trim() || '🥷',
+          enterToSend: saved.enterToSend !== false,
+        };
+      } catch {}
+    }
+
+    function applySettings() {
+      headerNameEl.textContent = settings.displayName;
+      document.title = settings.displayName + ' Chat';
+      const avatar = document.querySelector('#header .avatar');
+      if (avatar) avatar.textContent = settings.emoji;
+      const emptyIcon = document.querySelector('#empty-state .icon');
+      if (emptyIcon) emptyIcon.textContent = settings.emoji;
+      const emptyStrong = document.querySelector('#empty-state strong');
+      if (emptyStrong) emptyStrong.textContent = settings.displayName;
+      inputEl.placeholder = `Message ${settings.displayName.split(' ')[0] || 'assistant'}…`;
+    }
+
+    function saveSettings() {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      applySettings();
+    }
+
+    function openSettings() {
+      settingsDisplayName.value = settings.displayName;
+      settingsEmoji.value = settings.emoji;
+      settingsEnterToSend.checked = settings.enterToSend;
+      settingsOverlay.classList.add('open');
+      settingsDisplayName.focus();
+    }
+
+    function closeSettings() {
+      settingsOverlay.classList.remove('open');
+    }
+
+    // ── Local cache + server sync helpers ──
     function loadConversations() {
       try { return JSON.parse(localStorage.getItem(STORE_KEY)) || []; }
       catch { return []; }
@@ -903,6 +1119,40 @@
 
     function saveConversations() {
       localStorage.setItem(STORE_KEY, JSON.stringify(conversations));
+    }
+
+    async function fetchConversationsFromServer() {
+      const res = await fetch('/api/conversations', {
+        headers: {
+          'X-CSRF-Token': csrfToken,
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+      });
+      if (!res.ok) throw new Error('Failed to load conversation history');
+      const data = await res.json();
+      return Array.isArray(data.conversations) ? data.conversations : [];
+    }
+
+    async function upsertConversationOnServer(conv) {
+      await fetch('/api/conversations/' + encodeURIComponent(conv.id), {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken,
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: JSON.stringify(conv),
+      });
+    }
+
+    async function deleteConversationOnServer(id) {
+      await fetch('/api/conversations/' + encodeURIComponent(id), {
+        method: 'DELETE',
+        headers: {
+          'X-CSRF-Token': csrfToken,
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+      });
     }
 
     function getConv(id) {
@@ -985,6 +1235,7 @@
       });
 
       saveConversations();
+      upsertConversationOnServer(getConv(currentId)).catch(() => {});
       clearMessages();
       renderSidebar();
       inputEl.focus();
@@ -1012,6 +1263,7 @@
     function deleteConversation(id) {
       conversations = conversations.filter(c => c.id !== id);
       saveConversations();
+      deleteConversationOnServer(id).catch(() => {});
 
       if (id === currentId) {
         if (conversations.length > 0) {
@@ -1023,6 +1275,20 @@
       } else {
         renderSidebar();
       }
+    }
+
+    async function clearAllConversations() {
+      const ids = conversations.map(c => c.id);
+      conversations = [];
+      history = [];
+      currentId = null;
+      saveConversations();
+      clearMessages();
+      renderSidebar();
+
+      await Promise.allSettled(ids.map(id => deleteConversationOnServer(id)));
+
+      startNewChat();
     }
 
     function saveCurrentConversation() {
@@ -1042,6 +1308,7 @@
       }
 
       saveConversations();
+      upsertConversationOnServer(conv).catch(() => {});
       renderSidebar();
     }
 
@@ -1151,6 +1418,7 @@
 
     // ── Send on Enter ──
     inputEl.addEventListener('keydown', e => {
+      if (!settings.enterToSend) return;
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         sendMessage();
@@ -1158,6 +1426,32 @@
     });
 
     sendBtn.addEventListener('click', sendMessage);
+
+    settingsBtn.addEventListener('click', openSettings);
+    settingsCancel.addEventListener('click', closeSettings);
+    settingsSave.addEventListener('click', () => {
+      settings.displayName = (settingsDisplayName.value || '').trim() || 'Jun Suzuki';
+      settings.emoji = (settingsEmoji.value || '').trim() || '🥷';
+      settings.enterToSend = settingsEnterToSend.checked;
+      saveSettings();
+      closeSettings();
+    });
+
+    settingsResetConversations.addEventListener('click', async () => {
+      const ok = window.confirm('Clear all conversations and start fresh? This cannot be undone.');
+      if (!ok) return;
+      settingsResetConversations.disabled = true;
+      try {
+        await clearAllConversations();
+        closeSettings();
+      } finally {
+        settingsResetConversations.disabled = false;
+      }
+    });
+
+    settingsOverlay.addEventListener('click', e => {
+      if (e.target === settingsOverlay) closeSettings();
+    });
 
     // ── Attachment handling ──
     attachBtn.addEventListener('click', () => fileInput.click());
@@ -1278,6 +1572,8 @@
 
       appendMessage('user', displayText.trim());
       history.push({ role: 'user', content: text || '(see attached files)' });
+      // Persist immediately so refresh/error doesn't lose the just-sent message.
+      saveCurrentConversation();
 
       showTyping();
 
@@ -1297,8 +1593,17 @@
         removeTyping();
 
         if (!res.ok) {
-          const err = await res.json();
-          appendMessage('assistant', '⚠️ Error: ' + (err.error || res.status));
+          let message = String(res.status);
+          try {
+            const text = await res.text();
+            try {
+              const err = JSON.parse(text);
+              message = err.error || message;
+            } catch {
+              message = text || message;
+            }
+          } catch {}
+          appendMessage('assistant', '⚠️ Error: ' + message);
           busy = false;
           sendBtn.disabled = false;
           return;
@@ -1325,9 +1630,44 @@
             if (data === '[DONE]') continue;
             try {
               const obj = JSON.parse(data);
-              const delta = obj.choices?.[0]?.delta?.content;
-              if (delta) {
-                fullText += delta;
+
+              // Support multiple streaming chunk shapes:
+              // 1) Chat Completions: choices[0].delta.content (string or array)
+              // 2) Non-stream/final chunks: choices[0].message.content
+              // 3) Responses-style events: output_text / delta fields
+              let chunk = '';
+
+              const choice = obj.choices?.[0];
+              const delta = choice?.delta?.content;
+              const messageContent = choice?.message?.content;
+
+              if (typeof delta === 'string') {
+                chunk += delta;
+              } else if (Array.isArray(delta)) {
+                for (const part of delta) {
+                  if (typeof part === 'string') chunk += part;
+                  else if (part && typeof part.text === 'string') chunk += part.text;
+                }
+              }
+
+              if (!chunk && typeof messageContent === 'string') {
+                chunk += messageContent;
+              } else if (!chunk && Array.isArray(messageContent)) {
+                for (const part of messageContent) {
+                  if (typeof part === 'string') chunk += part;
+                  else if (part && typeof part.text === 'string') chunk += part.text;
+                }
+              }
+
+              if (!chunk && typeof obj.output_text === 'string') {
+                chunk += obj.output_text;
+              }
+              if (!chunk && typeof obj.delta === 'string') {
+                chunk += obj.delta;
+              }
+
+              if (chunk) {
+                fullText += chunk;
                 bubble.textContent = fullText;
                 scrollBottom();
               }
@@ -1461,6 +1801,9 @@
       if (e.key === 'Escape' && secretsOverlay.classList.contains('open')) {
         closeSecretsModal();
       }
+      if (e.key === 'Escape' && settingsOverlay.classList.contains('open')) {
+        closeSettings();
+      }
     });
 
     // ── Add-secret form ──
@@ -1556,12 +1899,56 @@
       if (e.key === 'Enter') { e.preventDefault(); safSave.click(); }
     });
 
-    // ── Init: restore last conversation or start fresh ──
+    // ── iOS-friendly dynamic viewport height ──
+    (function setupViewportHeight() {
+      const setViewport = () => {
+        const vv = window.visualViewport;
+        const viewportHeight = vv?.height || window.innerHeight;
+        const vh = viewportHeight * 0.01;
+        document.documentElement.style.setProperty('--vh', `${vh}px`);
+
+        const layout = document.getElementById('layout');
+        if (layout) {
+          layout.style.height = `calc(var(--vh, 1vh) * 100)`;
+        }
+      };
+
+      const keepComposerVisible = () => {
+        const active = document.activeElement;
+        if (active && (active.id === 'input' || active.closest?.('#input-area'))) {
+          document.getElementById('input-area')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        }
+      };
+
+      setViewport();
+      window.addEventListener('resize', () => { setViewport(); keepComposerVisible(); });
+      window.visualViewport?.addEventListener('resize', () => { setViewport(); keepComposerVisible(); });
+      window.visualViewport?.addEventListener('scroll', keepComposerVisible);
+      document.getElementById('input')?.addEventListener('focus', () => {
+        setViewport();
+        setTimeout(keepComposerVisible, 50);
+      });
+    })();
+
+    // ── Init: restore server history (fallback to local) ──
     (async function init() {
+      loadSettings();
       await initCsrf();
-      if (conversations.length > 0) {
-        // Remove empty conversations with no messages (stale new chats)
-        conversations = conversations.filter(c => c.messages.length > 0);
+
+      try {
+        const serverConversations = await fetchConversationsFromServer();
+        if (serverConversations.length > 0) {
+          conversations = serverConversations;
+          saveConversations();
+        } else {
+          conversations = conversations.filter(c => Array.isArray(c.messages) && c.messages.length > 0);
+          saveConversations();
+          for (const conv of conversations) {
+            upsertConversationOnServer(conv).catch(() => {});
+          }
+        }
+      } catch {
+        conversations = conversations.filter(c => Array.isArray(c.messages) && c.messages.length > 0);
         saveConversations();
       }
 
@@ -1571,6 +1958,8 @@
       } else {
         startNewChat();
       }
+
+      applySettings();
     })();
 
     // ── Health-check poller: auto-reload on backend restart ──

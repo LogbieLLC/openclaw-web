@@ -4,6 +4,7 @@ const multer = require('multer');
 const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
+const { DatabaseSync } = require('node:sqlite');
 
 const ipBlock = require('./middleware/ipBlock');
 const originCheck = require('./middleware/originCheck');
@@ -39,6 +40,45 @@ const csrf = require('./middleware/csrf');
 
 const OPENCLAW_URL = process.env.OPENCLAW_URL || 'http://127.0.0.1:18789/v1/chat/completions';
 const OPENCLAW_TOKEN = process.env.OPENCLAW_TOKEN || '';
+
+// ── SQLite persistence for webchat history ──
+const CHAT_DB_PATH = process.env.CHAT_DB_PATH || path.join(__dirname, 'data', 'webchat.db');
+fs.mkdirSync(path.dirname(CHAT_DB_PATH), { recursive: true });
+const chatDb = new DatabaseSync(CHAT_DB_PATH);
+chatDb.exec(`
+  PRAGMA journal_mode = WAL;
+  CREATE TABLE IF NOT EXISTS conversations (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL DEFAULT '',
+    messages_json TEXT NOT NULL DEFAULT '[]',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    deleted_at INTEGER
+  );
+`);
+
+const listConversationsStmt = chatDb.prepare(`
+  SELECT id, title, messages_json, created_at, updated_at
+  FROM conversations
+  WHERE deleted_at IS NULL
+  ORDER BY updated_at DESC
+`);
+
+const upsertConversationStmt = chatDb.prepare(`
+  INSERT INTO conversations (id, title, messages_json, created_at, updated_at, deleted_at)
+  VALUES (?, ?, ?, ?, ?, NULL)
+  ON CONFLICT(id) DO UPDATE SET
+    title = excluded.title,
+    messages_json = excluded.messages_json,
+    updated_at = excluded.updated_at,
+    deleted_at = NULL
+`);
+
+const softDeleteConversationStmt = chatDb.prepare(`
+  UPDATE conversations
+  SET deleted_at = ?, updated_at = ?
+  WHERE id = ?
+`);
 
 // ── Secret injection ──
 // Two syntaxes:
@@ -120,8 +160,8 @@ app.use(ipBlock);
 app.use(cookieParser());
 app.use(csrf.setToken);
 
-// Parse JSON bodies
-app.use(express.json());
+// Parse JSON bodies (attachments are base64, so default 100kb is too small)
+app.use(express.json({ limit: '25mb' }));
 
 // Static files
 app.use(express.static(path.join(__dirname, 'public')));
@@ -189,6 +229,52 @@ app.get('/api/csrf-token', (req, res) => {
     return t;
   })();
   res.json({ token });
+});
+
+// ── Conversation history persistence ──
+app.get('/api/conversations', originCheck, csrf.validate, (_req, res) => {
+  const rows = listConversationsStmt.all();
+  const conversations = rows.map(row => ({
+    id: row.id,
+    title: row.title,
+    messages: JSON.parse(row.messages_json || '[]'),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }));
+  res.json({ conversations });
+});
+
+app.put('/api/conversations/:id', originCheck, csrf.validate, (req, res) => {
+  const id = String(req.params.id || '').trim();
+  const body = req.body || {};
+  if (!id) return res.status(400).json({ error: 'Conversation id is required' });
+  if (!Array.isArray(body.messages)) return res.status(400).json({ error: 'messages must be an array' });
+
+  const title = typeof body.title === 'string' ? body.title : '';
+  const createdAt = Number.isFinite(body.createdAt) ? body.createdAt : Date.now();
+  const updatedAt = Number.isFinite(body.updatedAt) ? body.updatedAt : Date.now();
+
+  try {
+    upsertConversationStmt.run(id, title, JSON.stringify(body.messages), createdAt, updatedAt);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Failed to upsert conversation:', err);
+    res.status(500).json({ error: 'Failed to save conversation' });
+  }
+});
+
+app.delete('/api/conversations/:id', originCheck, csrf.validate, (req, res) => {
+  const id = String(req.params.id || '').trim();
+  if (!id) return res.status(400).json({ error: 'Conversation id is required' });
+
+  try {
+    const now = Date.now();
+    softDeleteConversationStmt.run(now, now, id);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Failed to delete conversation:', err);
+    res.status(500).json({ error: 'Failed to delete conversation' });
+  }
 });
 
 // ── .env file helpers ──
@@ -379,8 +465,29 @@ app.post('/api/chat', originCheck, csrf.validate, async (req, res) => {
     res.end();
   } catch (err) {
     console.error('Proxy error:', err);
-    res.status(500).json({ error: err.message });
+
+    // If we're already streaming, don't try to send JSON headers again.
+    // Just end the stream so the UI can recover cleanly.
+    if (res.headersSent) {
+      try {
+        res.write('data: {"error":"Upstream stream ended unexpectedly"}\n\n');
+      } catch {
+        // ignore write-after-close
+      }
+      return res.end();
+    }
+
+    res.status(502).json({ error: err?.message || 'Proxy stream failed' });
   }
+});
+
+// JSON parser errors (e.g., payload too large) should return clean JSON for the client
+app.use((err, _req, res, next) => {
+  if (!err) return next();
+  if (err.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'Request too large. Try a smaller image (max 10 MB).' });
+  }
+  return res.status(500).json({ error: err.message || 'Server error' });
 });
 
 module.exports = app;
